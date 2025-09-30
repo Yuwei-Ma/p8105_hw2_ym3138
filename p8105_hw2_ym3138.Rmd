@@ -11,22 +11,27 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Problem 1
 ```{r echo = TRUE, message = FALSE}
-#install.packages("moderndive")
 library(moderndive)
 library(tidyverse)
 library(ggplot2)
-data("early_january_weather")
-#help("early_january_weather")
 ```
 
-* The `early_january_weather` data set contains variables: 
-  + origin: Weather station
-  + year, month, day, hour: time of recording
-  + temp, dewp: Temperature and dewpoint in Fahrenheit. The mean temperature is `r mean(dplyr::pull(early_january_weather, temp), na.rm = TRUE)` F. 
-  + humid: relative humidity
-  + wind_dir, wind_speed, wind_gust: wind direction (in degrees), speed and gust speed (in mph)
+Clean the data
+```{r}
 
-It contains `r nrow(early_january_weather)` rows and `r ncol(early_january_weather)` columns of hourly meterological data from LGA, JFK and EWR for the month of January 2013. 
+pols_df = read_csv("data/fivethirtyeight_datasets/pols-month.csv")
+
+litters_df = 
+  read_csv("data/FAS_litters.csv", na = c("NA",".","")) # Fix the missingness
+litters_df = 
+  janitor::clean_names(litters_df) # cleaning up the names
+
+pups_df = 
+  read_csv("data/FAS_pups.csv", skip = 3, na = c("NA",".",""))
+pups_df = 
+  janitor::clean_names(pups_df)
+
+```
 
 
 ```{r}

@@ -13,77 +13,252 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r echo = TRUE, message = FALSE}
 library(moderndive)
 library(tidyverse)
+library(dplyr)
 library(ggplot2)
+library(readxl)
+library(lubridate)
 ```
 
-Clean the data
+Clean the data in pols_month.csv
 ```{r}
-
-pols_df = read_csv("data/fivethirtyeight_datasets/pols-month.csv")
-
-litters_df = 
-  read_csv("data/FAS_litters.csv", na = c("NA",".","")) # Fix the missingness
-litters_df = 
-  janitor::clean_names(litters_df) # cleaning up the names
-
-pups_df = 
-  read_csv("data/FAS_pups.csv", skip = 3, na = c("NA",".",""))
-pups_df = 
-  janitor::clean_names(pups_df)
-
+pols_df = read_csv("data/fivethirtyeight_datasets/pols-month.csv")  |>
+  separate(mon, into = c("year","month","day"), sep = "-", convert = TRUE) |> 
+  mutate(month = month.name[month]) |> 
+  mutate(
+    president = case_when(
+      prez_dem == 1 ~ "dem",
+      prez_gop == 1 ~ "gop")) |> 
+  select(-prez_dem, -prez_gop, -day)
+# create a president variable taking values gop and dem, and remove prez_dem and prez_gop; and remove the day variable.
 ```
 
+Clean the data in snp.csv
+```{r}
+snp_df = read_csv("data/fivethirtyeight_datasets/snp.csv")  |>
+  separate(date, into = c("month","day","year"), sep = "/", convert = TRUE) |> 
+  mutate(month = month.name[month]) |> 
+  mutate(year = ifelse(year >= 50, 1900 + year, 2000 + year)) |> 
+  select(year, month, everything(), -day) 
+```
+
+Tidy the unemployment data
+```{r}
+une_df = read_csv("data/fivethirtyeight_datasets/unemployment.csv")  |>
+  pivot_longer(
+    cols = Jan:Dec,
+    names_to = "month",
+    values_to = "unemployment"
+  ) |> 
+  mutate(month = month.name[match(month, month.abb)]) |> 
+  janitor::clean_names()
+```
+
+Joining the datasets
 
 ```{r}
-ggplot(early_january_weather, aes(x = time_hour, y = temp, color = humid)) +
-  geom_point(alpha = 0.7)+
-  labs(
-    title = "Temperature vs Time in January 2013",
-    x = "Time (h)",
-    y = "Temperature (F)"
-  )
+# Join the datasets by merging snp into pols
+snp_pols_df = 
+  left_join(snp_df, pols_df, by = c("year", "month"))
 
-ggsave("temp_vs_time_hour.png", width = 8, height = 5)
+# merging unemployment into the result
+
+merged_df = 
+    left_join(snp_pols_df, une_df, by = c("year", "month"))
 ```
 
-Temperature rises and falls with a daily cycle (with higher temperature during the day and lower during the night). Humidity tends to be higher when temperatures are lower. In addition, as time increases, humidity and temperature generally increases. 
+```{r}
+pols = read_csv("data/fivethirtyeight_datasets/pols-month.csv")
+snp = read_csv("data/fivethirtyeight_datasets/snp.csv")
+unemp = read_csv("data/fivethirtyeight_datasets/unemployment.csv")
+```
+
+
+Write a short paragraph about these datasets. Explain briefly what each dataset contained, and describe the resulting dataset (e.g. give the dimension, range of years, and names of key variables).
+
+## pols
+* The `pols-month` data set contains `r nrow(pols)` rows and `r ncol(pols)` columns. 
+* It spans the period from `r pols_df |> summarise(min_year = min(year))` to `r pols_df |> summarise(max_year = max(year))`. 
+* Key variables include `r paste(names(pols)[-1], collapse = ", ")`, which record 
+the party of the president (`prez_gop`, `prez_dem`), as well as the number of 
+governors, senators, and representatives from each party.
+
+## snp
+The `snp` dataset contains `r nrow(snp)` rows and `r ncol(snp)` columns, 
+tracking the daily closing values of Standard & Poor’s stock market index (S&P). 
+It spans the period from `r snp_df |> summarise(min_year = min(year))` 
+to `r snp_df |> summarise(max_year = max(year))`. 
+The key variables are `date`, which records the observation time, and `close`, 
+which gives the closing price of the index.
+
+## unemployment
+The `unemployment` dataset contains `r nrow(unemp)` rows and `r ncol(unemp)` columns, 
+reporting monthly U.S. unemployment rates. The data are arranged in wide format, 
+with each row corresponding to a year and columns `Jan` through `Dec` giving the 
+monthly unemployment percentages. The dataset spans the period from 
+`r unemp |> summarise(min_year = min(Year)) |> pull(min_year)` 
+to `r unemp |> summarise(max_year = max(Year)) |> pull(max_year)`. 
+Key variables include `Year` and the twelve monthly columns (`Jan`–`Dec`), 
+which record the unemployment rate for each month.
+
 
 ## Problem 2
-This problem is intended to emphasize variable types and introduce coercion; some awareness of how R treats numeric, character, and factor variables is necessary for working with these data types in practice.
+Read and clean the Mr. Trash Wheel sheet:
 
-Create a data frame comprised of:
+* specify the sheet in the Excel file and to omit non-data entries (rows with notes / figures; columns containing notes) using arguments in read_excel
+* use reasonable variable names
+* omit rows that do not include dumpster-specific data
+* round the number of sports balls to the nearest integer and converts the result to an integer variable (using as.integer)
 ```{r}
-# a random sample of size 10 from a standard Normal distribution
-set.seed(1234)
-x <- rnorm(10)
+mrtw_df =
+  read_excel("data/202509 Trash Wheel Collection Data.xlsx", skip = 1, sheet = "Mr. Trash Wheel") |>  
+  janitor::clean_names() |> 
+  filter(!is.na(dumpster)) |> 
+  mutate(
+    sports_balls = as.integer(round(sports_balls)),
+    trash_wheel = "mr"
+  ) |> 
+  select(-year, -x15, -x16) |> 
+  separate(date, into = c("year","month","day"), sep = "-", convert = TRUE) 
+```
 
-df = tibble(
-  x_numeric = x,
-  x_logic = x > 0, # a logical vector indicating whether elements of the sample are greater than 0
-  x_char = letters[1:10], # a character vector of length 10
-  x_fac = factor(rep(c("low","medium","high"), length.out = 10)) # a factor vector of length 10, with 3 different factor “levels”
+Professor Trash Wheel
+```{r}
+ptw_df =
+  read_excel("data/202509 Trash Wheel Collection Data.xlsx", skip = 1, sheet = "Professor Trash Wheel") |>  
+  janitor::clean_names() |> 
+  filter(!is.na(dumpster)) |> 
+  select(-year) |> 
+  separate(date, into = c("year","month","day"), sep = "-", convert = TRUE) |> 
+  mutate(
+    trash_wheel = "professor"
+  )
+```
+
+Gwynnda
+```{r}
+gtw_df =
+  read_excel("data/202509 Trash Wheel Collection Data.xlsx", skip = 1, sheet = "Gwynns Falls Trash Wheel") |>  
+  janitor::clean_names() |> 
+  filter(!is.na(dumpster)) |> 
+  select(-year) |> 
+  separate(date, into = c("year","month","day"), sep = "-", convert = TRUE) |> 
+  mutate(
+    trash_wheel = "gwynnda"
+  )
+```
+
+Combining
+```{r}
+combined_tw_df = bind_rows(
+  mrtw_df,
+  ptw_df,
+  gtw_df
 )
 ```
 
-Try to take the mean of each variable in your dataframe. What works and what doesn’t?
-Hint: for now, to take the mean of a variable in a dataframe, you need to pull the variable out of the dataframe. Try loading the tidyverse and using the pull function.
+Write a paragraph about these data; you are encouraged to use inline R. Be sure to note the number of observations in the resulting dataset, and give examples of key variables. For available data, what was the total weight of trash collected by Professor Trash Wheel? What was the total number of cigarette butts collected by Gwynnda in June of 2022?
+
+The combined dataset contains `r nrow(combined_tw_df)` observations, tracking trash collection events for the three Baltimore trash wheels, identified by the `trash_wheel` variable. Key variables include the total `weight_tons` of debris collected in each dumpster and counts of specific items like `plastic_bottles` and `cigarette_butts`. Professor Trash Wheel collected a total of `r combined_tw_df |> filter(trash_wheel == "professor") |> summarize(total_w = sum(weight_tons, na.rm = TRUE)) |> pull(total_w)` tons of trash. For Gwynnda, the total number of cigarette butts collected in June of 2022 was `r combined_tw_df |> filter(trash_wheel == "gwynnda", year == 2022, month == "6") |> summarize(total_cb = sum(cigarette_butts, na.rm = TRUE)) |> pull(total_cb) |> format(scientific = FALSE)`.
+
+## Problem 3
+
 ```{r}
-library(tidyverse)
-mean(pull(df, x_numeric)) # works
-mean(pull(df, x_logic)) # works
-mean(pull(df, x_char)) # warning - returning NA
-# mean(pull(df, x_fac) # error - unexpected symbol, comment this line
+zipcode_df = 
+  read_csv("data/zillow_data/Zip Codes.csv") |> 
+  janitor::clean_names() |> 
+  mutate(file_date = mdy(file_date)) |> 
+  select(zip_code, county, neighborhood, county_code, county_fips,state_fips, everything())
 ```
 
-In some cases, you can explicitly convert variables from one type to another. Write a code chunk that applies the as.numeric function to the logical, character, and factor variables (please show this chunk but not the output). What happens, and why? Does this help explain what happens when you try to take the mean?
-```{r echo = TRUE, results = 'hide'}
-as.numeric(pull(df, x_logic)) # 0 1 1 0 1 1 0 0 0 0
-as.numeric(pull(df, x_char)) # NAs introduced by coercion 
-as.numeric(pull(df, x_fac)) # 2 3 1 2 3 1 2 3 1 2
+```{r}
+rent_df = 
+  read_csv("data/zillow_data/Zip_zori_uc_sfrcondomfr_sm_month_NYC.csv") |> 
+  janitor::clean_names() |> 
+  pivot_longer(
+    cols = starts_with("x"),
+    names_to = "date",
+    values_to = "rent") |> 
+  rename(zip_code = region_name) |> 
+  mutate(date = as.Date(sub("x", "", date), format = "%Y_%m_%d")) |> 
+  mutate(county = str_remove(county_name, " County$")) |> 
+  select(date, zip_code, rent, county, metro, city, state, state_name, size_rank, everything(),-county_name,-region_type)
 ```
-* Converting logic variables to numeric maps `TRUE = 1` and `FALSE = 0`. That means why taking the mean of a logical vector works
-* Character cannot be directly coerced to numeric, so R produces `NA` with a warning. That’s why `mean()` fails on characters.
-* Converting factor to numeric works. `as.numeric()` maps ordinal data to integers (`low = 1, medium = 2, high = 3`). However, `mean()` on a raw factor takes mean on original ordinal data instead of the numeric data, and that's why there's an error when doing that.
+
+
+```{r}
+combined_zip_df = 
+  rent_df |> 
+  left_join(zipcode_df, by = "zip_code", relationship = "many-to-many") |> 
+  select(-county.y) |> 
+  rename(county = county.x) |> 
+  select(zip_code, county, neighborhood, date, rent, everything()) |> 
+  distinct(zip_code, date, .keep_all = TRUE)
+```
+
+
+check duplicates
+```{r}
+duplicates = 
+combined_zip_df |> 
+  summarise(n = n(), .by = c(zip_code, county, neighborhood, region_id, date)) |> 
+  filter(n > 1)
+```
+
+
+Briefly describe the resulting tidy dataset. How many total observations exist? How many unique ZIP codes are included, and how many unique neighborhoods?
+
+ * The combined dataset contains `r nrow(combined_zip_df)` observations, representing rental price observation for a specific ZIP code on a specific date combined with neighborhood metadata.
+ * Key variables include 
+    + `rent` which is the Zillow Observed Rent Index (ZORI), a repeat-rent index that is weighted to the rental housing stock to ensure representativeness across the entire market, not just those homes currently listed for-rent. The index is dollar-denominated by computing the mean of listed rents that fall into the 35th to 65th percentile range for all homes and apartments in a given region, which is weighted to reflect the rental housing stock
+    + `date`, time of observation, spans from January 2015 to August 2024.
+    + `county`, `zip_code`, `state`, etc. for location.
+ * It includes `r combined_zip_df |> distinct(zip_code) |> tally()` unique Zip codes, and `r combined_zip_df |> distinct(neighborhood) |> tally()` unique neighborhoods.
+ 
+
+Which ZIP codes appear in the ZIP code dataset but not in the Zillow Rental Price dataset? Using a few illustrative examples discuss why these ZIP codes might be excluded from the Zillow dataset.
+
+```{r}
+zip_missing =
+  zipcode_df  |> 
+  distinct(zip_code) |> 
+  anti_join(rent_df  |>  distinct(zip_code), by = "zip_code")
+```
+
+ZIP codes in `zip_missing` appear in the ZIP code dataset but not in the Zillow Rental Price dataset.
+Missing ZIPs may correspond to low-population areas, newly created ZIPs, or ZIPs with few/no rental listings, which Zillow does not report. For example:
+
+ * 10464: A notable portion of the zip code is dedicated to parks and open spaces
+ * 10118: zip code for the Empire State Building. The Empire State Building was assigned its own ZIP code because it has more than 150 businesses inside that could receive mail
+ * 11371: zip code for LaGuardia airport.
+
+
+
+Rental prices fluctuated dramatically during the COVID-19 pandemic. For all available ZIP codes, compare rental prices in January 2021 to prices in January 2020. Make a table that shows the 10 ZIP codes (along with the borough and neighborhood) with largest drop in price from January 2020 to 2021. Comment.
+
+```{r}
+rent_filtered = 
+  combined_zip_df |> 
+  filter(date %in% as.Date(c("2020-01-31", "2021-01-31"))) |> 
+  filter(!is.na(rent)) |> 
+  select(zip_code, county, neighborhood, date, rent, region_id) 
+```
+
+Compare
+```{r}
+rent_compare =
+  rent_filtered |>
+  pivot_wider(names_from = date, values_from = rent, names_prefix = "rent_") |>
+  rename(rent_2021 = `rent_2021-01-31`, rent_2020 = `rent_2020-01-31`, borough = county) |>
+  mutate(price_drop = rent_2021 - rent_2020) |>
+  arrange(price_drop) |>
+  slice_head(n = 10)
+```
+
+Comment:
+
+ *  The 10 ZIP codes with largest drop in price from January 2020 to 2021 are all in Manhattan, New York County, with neighborhoods in Lower Manhattan (10007, 10004, 10038), Lower East Side (10002, 10009), Gramercy Park and Murray Hill (10016, 10010), Chelsea and Clinton (10001) and Greenwich Village and SoHo (10012). This suggests the core of Manhattan experienced the steepest rental declines. These are some of the most expensive and centrally located rental markets in the city.
+ * The declines are dramatic. Drops ranged from about –685 to –913 USD per month, which is roughly 15% to 20% declines.  
+ * During the COVID-19 pandemic, demand for housing in business and tourism-heavy neighborhoods largely declined because of quarantine, as offices closed, nightlife and restaurants shut down. By contrast, outer boroughs such as the Bronx and Queens experienced smaller declines or even relative stability, as these locations generally have lower baseline rents and more locally rooted demand.
 
 
 

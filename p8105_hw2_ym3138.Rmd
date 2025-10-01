@@ -58,7 +58,7 @@ Joining the datasets
 ```{r}
 # Join the datasets by merging snp into pols
 snp_pols_df = 
-  left_join(snp_df, pols_df, by = c("year", "month"))
+  left_join(pols_df, snp_df, by = c("year", "month"))
 
 # merging unemployment into the result
 
@@ -100,6 +100,9 @@ to `r unemp |> summarise(max_year = max(Year)) |> pull(max_year)`.
 Key variables include `Year` and the twelve monthly columns (`Jan`–`Dec`), 
 which record the unemployment rate for each month.
 
+## merged
+The `merged` dataset menged information from `pols-month`, `snp` and `unemployment`, covered the party of the president, the number of 
+governors, senators, and representatives from each party, S&P index, unemployment rates, etc. It contains `r nrow(merged_df)` rows and `r ncol(merged_df)` columns. The dataset spans the period from `r min(merged_df$year)` to `r max(merged_df$year)`, the key variables including `year`, `month`,`close`, `president` and `unemployement`. 
 
 ## Problem 2
 Read and clean the Mr. Trash Wheel sheet:
